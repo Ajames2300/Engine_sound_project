@@ -35,20 +35,14 @@ if __name__ == "__main__":
     # Frequency
     freq_feature = FreqFeatureExtractor(data = sample)
     
-    _, psd_pxx = freq_feature.psd(sample_rate= TrainEngineData.sample_rate[0], 
-                                  nfft = 2048, 
-                                  window = "hann", 
-                                  scaling = "density")
-    
-    _, peaks_height = freq_feature.top_peaks_finding(psd_feature = psd_pxx,
-                                                     height = 0)
-    
+    # Frequency feature(log band power ratio)
+    log_band_power_ratios = freq_feature.make_freq_features(feature_type="log_power_ratios")
 
     # To arr, to tensor 
     entire_static_feature = torch.tensor([[d["mean"], d["variance"], d["std"], d["rms"]] for d in entire_static_feature])
-    entire_frequency_feature = torch.tensor(np.array(peaks_height))
+    entire_frequency_feature = torch.tensor(np.array(log_band_power_ratios))
     
-
+    # X_train = torch.tensor(entire_frequency_feature, dtype=torch.float32)
     X_train = torch.concat((entire_static_feature, entire_frequency_feature), dim = 1)
     y_train = torch.tensor(label, dtype=torch.int64)
 
@@ -113,18 +107,18 @@ if __name__ == "__main__":
             # Soft threshold
             threshold = lr * lambda_l1
 
-            # 取得當前權重的梯度 (假設只優化 weight，不優化 bias)
-            current_grad = model.linear.weight.grad.data.clone().T # 轉置以匹配 (D, C)
+            # Current gradient, without bias
+            current_grad = model.linear.weight.grad.data.clone().T # fit with (D, C)
             
             if lambda_l1 > 0:
                 for name, p in model.named_parameters():
                     # Update weight only, bias not
                     if 'bias' not in name:
 
-                        # 取得上個 epoch 中該 batch 的 grad
+                        # previous gradient from table of certain idx
                         old_grad = grad_table[idx]
      
-                        # SAGA : [新梯度 - 舊梯度 + 平均梯度]
+                        # SAGA : [new grdad - old grad + avg grad]
                         saga_update_dir = current_grad - old_grad + avg_grad
 
                         # Weight update 
@@ -165,12 +159,25 @@ if __name__ == "__main__":
     torch.save(model.state_dict(), saved_model_name)
     
     weights = model.linear.weight.detach().numpy()
-    feature_name = ['Mean', 'Variance', 'STD', 'RMS', 'Peak_1', 'Peak_2', 'Peak_3']
-    plt.figure(figsize=(10, 4))
+    feature_name = ['Mean', 'Variance', 'STD', 'RMS', 'band1', 'band2', 'band3', 'band4', 'band5']
+    plt.figure(figsize=(14, 6))
+
     sns.heatmap(weights, annot=True, cmap='RdBu', center=0,
                 yticklabels=['Class 0', 'Class 1', 'Class 2'],
                 xticklabels=[name for name in feature_name])
     plt.title("Feature Importance Heatmap")
+
+    # Add band information next to the map
+    bands_info = [
+        "Band 1: 0.5-3000 Hz",
+        "Band 2: 3000-8000 Hz",
+        "Band 3: 8000-13000 Hz",
+        "Band 4: 13000-18000 Hz",
+        "Band 5: 18000-22050 Hz"
+    ]
+    for i, info in enumerate(bands_info):
+        plt.figtext(0.85, 0.8 - i*0.05, info, fontsize=10, ha='left')
+
     plt.show()
     
     # Save loss history for visualization

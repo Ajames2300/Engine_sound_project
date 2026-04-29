@@ -30,20 +30,13 @@ if __name__ == "__main__":
     test_static_feature = StaticFeatureExtractor(data = test_sample)
     entire_static_feature = test_static_feature.make_static_features()
 
-    # Frequency
+    # Frequency feature(log band power ratio)
     freq_feature = FreqFeatureExtractor(data = test_sample)
-    _, psd_pxx = freq_feature.psd(sample_rate= TestEngineData.sample_rate[0], 
-                                  nfft = 2048, 
-                                  window = "hann", 
-                                  scaling = "density")
+    log_band_power_ratios = freq_feature.make_freq_features(feature_type="log_power_ratios")
     
-    _, peaks_height = freq_feature.top_peaks_finding(psd_feature = psd_pxx,
-                                                     height = 0)
-    
-
     # To arr, to tensor 
     entire_static_feature = torch.tensor([[d["mean"], d["variance"], d["std"], d["rms"]] for d in entire_static_feature])
-    entire_frequency_feature = torch.tensor(np.array(peaks_height))
+    entire_frequency_feature = torch.tensor(np.array(log_band_power_ratios))
     entire_feature = torch.concat((entire_static_feature, entire_frequency_feature), dim = 1)
     
     del entire_static_feature, entire_frequency_feature
